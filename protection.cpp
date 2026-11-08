@@ -8,7 +8,8 @@
 Protection::~Protection()
 {
     const esp_err_t err = deinit();
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "Gagal melepaskan resource saat destructor: %s",
                  esp_err_to_name(err));
     }
@@ -16,7 +17,8 @@ Protection::~Protection()
 
 esp_err_t Protection::init(const Config &config)
 {
-    if (initialized_) {
+    if (initialized_)
+    {
         ESP_LOGE(TAG, "Protection sudah diinisialisasi");
         return ESP_ERR_INVALID_STATE;
     }
@@ -50,13 +52,15 @@ esp_err_t Protection::init(const Config &config)
         (config.fault_gpio != GPIO_NUM_NC &&
          (!valid_gpio(config.fault_gpio) ||
           config.fault_gpio_debounce_samples == 0 ||
-          (config.fault_gpio_pull_up && config.fault_gpio_pull_down)))) {
+          (config.fault_gpio_pull_up && config.fault_gpio_pull_down))))
+    {
         ESP_LOGE(TAG, "Konfigurasi protection tidak valid");
         return ESP_ERR_INVALID_ARG;
     }
 
     config_ = config;
-    if (config_.fault_gpio != GPIO_NUM_NC) {
+    if (config_.fault_gpio != GPIO_NUM_NC)
+    {
         gpio_config_t gpio_configure = {};
         gpio_configure.pin_bit_mask =
             1ULL << static_cast<unsigned>(config_.fault_gpio);
@@ -68,7 +72,8 @@ esp_err_t Protection::init(const Config &config)
         gpio_configure.intr_type = GPIO_INTR_DISABLE;
 
         const esp_err_t err = gpio_config(&gpio_configure);
-        if (err != ESP_OK) {
+        if (err != ESP_OK)
+        {
             ESP_LOGE(TAG, "Gagal mengonfigurasi GPIO fault: %s",
                      esp_err_to_name(err));
             return err;
@@ -79,6 +84,9 @@ esp_err_t Protection::init(const Config &config)
     latched_fault_ = protection_fault_t::None;
     output_active_ = false;
     output_activated_at_us_ = 0;
+    latest_sample_ = {};
+    latest_sample_available_ = false;
+    sample_updated_while_output_off_ = false;
     reset_counters();
     initialized_ = true;
     ESP_LOGI(TAG, "Proteksi software siap");
@@ -88,19 +96,27 @@ esp_err_t Protection::init(const Config &config)
 esp_err_t Protection::deinit()
 {
     esp_err_t err = ESP_OK;
-    if (fault_gpio_configured_) {
+    if (fault_gpio_configured_)
+    {
         err = gpio_reset_pin(config_.fault_gpio);
-        if (err != ESP_OK) {
+        if (err != ESP_OK)
+        {
             ESP_LOGE(TAG, "Gagal mereset GPIO fault: %s", esp_err_to_name(err));
-        } else {
+        }
+        else
+        {
             fault_gpio_configured_ = false;
         }
     }
 
-    if (err == ESP_OK) {
+    if (err == ESP_OK)
+    {
         initialized_ = false;
         output_active_ = false;
         output_activated_at_us_ = 0;
+        latest_sample_ = {};
+        latest_sample_available_ = false;
+        sample_updated_while_output_off_ = false;
         reset_counters();
     }
     return err;
@@ -108,30 +124,39 @@ esp_err_t Protection::deinit()
 
 esp_err_t Protection::set_output_active(bool active)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (output_active_ == active) {
+    if (output_active_ == active)
+    {
         return ESP_OK;
     }
 
     output_active_ = active;
     reset_counters();
-    if (active) {
+    if (active)
+    {
         output_activated_at_us_ = esp_timer_get_time();
+        sample_updated_while_output_off_ = false;
         ESP_LOGI(TAG, "Pemantauan output dimulai");
-    } else {
+    }
+    else
+    {
         output_activated_at_us_ = 0;
+        sample_updated_while_output_off_ = false;
     }
     return ESP_OK;
 }
 
 esp_err_t Protection::set_over_voltage_limit(float limit_v, float hysteresis_v)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (!valid_limit(limit_v, hysteresis_v)) {
+    if (!valid_limit(limit_v, hysteresis_v))
+    {
         return ESP_ERR_INVALID_ARG;
     }
     config_.over_voltage_limit_v = limit_v;
@@ -142,10 +167,12 @@ esp_err_t Protection::set_over_voltage_limit(float limit_v, float hysteresis_v)
 
 esp_err_t Protection::set_over_current_limit(float limit_a, float hysteresis_a)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (!valid_limit(limit_a, hysteresis_a)) {
+    if (!valid_limit(limit_a, hysteresis_a))
+    {
         return ESP_ERR_INVALID_ARG;
     }
     config_.over_current_limit_a = limit_a;
@@ -156,10 +183,12 @@ esp_err_t Protection::set_over_current_limit(float limit_a, float hysteresis_a)
 
 esp_err_t Protection::set_over_power_limit(float limit_w, float hysteresis_w)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (!valid_limit(limit_w, hysteresis_w)) {
+    if (!valid_limit(limit_w, hysteresis_w))
+    {
         return ESP_ERR_INVALID_ARG;
     }
     config_.over_power_limit_w = limit_w;
@@ -171,10 +200,12 @@ esp_err_t Protection::set_over_power_limit(float limit_w, float hysteresis_w)
 esp_err_t Protection::set_over_temperature_limit(float limit_c,
                                                  float hysteresis_c)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (!valid_limit(limit_c, hysteresis_c)) {
+    if (!valid_limit(limit_c, hysteresis_c))
+    {
         return ESP_ERR_INVALID_ARG;
     }
     config_.over_temperature_limit_c = limit_c;
@@ -185,12 +216,14 @@ esp_err_t Protection::set_over_temperature_limit(float limit_c,
 
 esp_err_t Protection::set_over_voltage_enabled(bool enabled)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
     if (enabled &&
         !valid_limit(config_.over_voltage_limit_v,
-                     config_.over_voltage_hysteresis_v)) {
+                     config_.over_voltage_hysteresis_v))
+    {
         return ESP_ERR_INVALID_STATE;
     }
     config_.over_voltage_enabled = enabled;
@@ -200,12 +233,14 @@ esp_err_t Protection::set_over_voltage_enabled(bool enabled)
 
 esp_err_t Protection::set_over_current_enabled(bool enabled)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
     if (enabled &&
         !valid_limit(config_.over_current_limit_a,
-                     config_.over_current_hysteresis_a)) {
+                     config_.over_current_hysteresis_a))
+    {
         return ESP_ERR_INVALID_STATE;
     }
     config_.over_current_enabled = enabled;
@@ -215,12 +250,14 @@ esp_err_t Protection::set_over_current_enabled(bool enabled)
 
 esp_err_t Protection::set_over_power_enabled(bool enabled)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
     if (enabled &&
         !valid_limit(config_.over_power_limit_w,
-                     config_.over_power_hysteresis_w)) {
+                     config_.over_power_hysteresis_w))
+    {
         return ESP_ERR_INVALID_STATE;
     }
     config_.over_power_enabled = enabled;
@@ -230,12 +267,14 @@ esp_err_t Protection::set_over_power_enabled(bool enabled)
 
 esp_err_t Protection::set_over_temperature_enabled(bool enabled)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
     if (enabled &&
         !valid_limit(config_.over_temperature_limit_c,
-                     config_.over_temperature_hysteresis_c)) {
+                     config_.over_temperature_hysteresis_c))
+    {
         return ESP_ERR_INVALID_STATE;
     }
     config_.over_temperature_enabled = enabled;
@@ -246,24 +285,35 @@ esp_err_t Protection::set_over_temperature_enabled(bool enabled)
 esp_err_t Protection::update(const Sample &sample,
                              protection_fault_t *out_fault)
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (out_fault == nullptr) {
+    if (out_fault == nullptr)
+    {
         return ESP_ERR_INVALID_ARG;
+    }
+    latest_sample_ = sample;
+    latest_sample_available_ = true;
+    if (!output_active_)
+    {
+        sample_updated_while_output_off_ = true;
     }
     *out_fault = latched_fault_;
 
-    if (!output_active_ || latched_fault_ != protection_fault_t::None) {
+    if (!output_active_ || latched_fault_ != protection_fault_t::None)
+    {
         return ESP_OK;
     }
 
-    if (sample.sensor_error) {
+    if (sample.sensor_error)
+    {
         const esp_err_t err = latch_fault(protection_fault_t::SensorError);
         *out_fault = latched_fault_;
         return err;
     }
-    if (!sample_valid(sample)) {
+    if (!sample_valid(sample))
+    {
         const esp_err_t err = latch_fault(protection_fault_t::InvalidMeasurement);
         *out_fault = latched_fault_;
         return err;
@@ -271,13 +321,16 @@ esp_err_t Protection::update(const Sample &sample,
 
     bool gpio_fault_active = false;
     const esp_err_t gpio_err = read_fault_gpio(&gpio_fault_active);
-    if (gpio_err != ESP_OK) {
+    if (gpio_err != ESP_OK)
+    {
         return gpio_err;
     }
     if (config_.fault_gpio != GPIO_NUM_NC &&
         threshold_reached(gpio_fault_active,
                           config_.fault_gpio_debounce_samples,
-                          &fault_gpio_count_)) {
+                          &fault_gpio_count_))
+    {
+        printf("GPIO LATH: %d\n", (int)gpio_fault_active);
         const esp_err_t err = latch_fault(protection_fault_t::ShortCircuit);
         *out_fault = latched_fault_;
         return err;
@@ -287,17 +340,20 @@ esp_err_t Protection::update(const Sample &sample,
         threshold_reached(sample.temperature_c >=
                               config_.over_temperature_limit_c,
                           config_.over_temperature_debounce_samples,
-                          &over_temperature_count_)) {
+                          &over_temperature_count_))
+    {
         const esp_err_t err = latch_fault(protection_fault_t::OverTemperature);
         *out_fault = latched_fault_;
         return err;
     }
 
-    if (!startup_grace_active()) {
+    if (!startup_grace_active())
+    {
         if (config_.over_voltage_enabled &&
             threshold_reached(sample.voltage_v >= config_.over_voltage_limit_v,
                               config_.over_voltage_debounce_samples,
-                              &over_voltage_count_)) {
+                              &over_voltage_count_))
+        {
             const esp_err_t err = latch_fault(protection_fault_t::OverVoltage);
             *out_fault = latched_fault_;
             return err;
@@ -305,7 +361,8 @@ esp_err_t Protection::update(const Sample &sample,
         if (config_.over_current_enabled &&
             threshold_reached(sample.current_a >= config_.over_current_limit_a,
                               config_.over_current_debounce_samples,
-                              &over_current_count_)) {
+                              &over_current_count_))
+        {
             const esp_err_t err = latch_fault(protection_fault_t::OverCurrent);
             *out_fault = latched_fault_;
             return err;
@@ -313,12 +370,15 @@ esp_err_t Protection::update(const Sample &sample,
         if (config_.over_power_enabled &&
             threshold_reached(sample.power_w >= config_.over_power_limit_w,
                               config_.over_power_debounce_samples,
-                              &over_power_count_)) {
+                              &over_power_count_))
+        {
             const esp_err_t err = latch_fault(protection_fault_t::OverPower);
             *out_fault = latched_fault_;
             return err;
         }
-    } else {
+    }
+    else
+    {
         over_voltage_count_ = 0;
         over_current_count_ = 0;
         over_power_count_ = 0;
@@ -327,30 +387,46 @@ esp_err_t Protection::update(const Sample &sample,
     return ESP_OK;
 }
 
-esp_err_t Protection::clear_fault(const Sample &sample)
+esp_err_t Protection::clear_fault()
 {
-    if (!initialized_) {
+    if (!initialized_)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (latched_fault_ == protection_fault_t::None) {
+    if (latched_fault_ == protection_fault_t::None)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (output_active_) {
+    if (output_active_)
+    {
         ESP_LOGE(TAG, "Matikan output sebelum menghapus fault");
         return ESP_ERR_INVALID_STATE;
     }
-    if (sample.sensor_error || !sample_valid(sample) ||
-        !sample_recovered(sample)) {
-        ESP_LOGE(TAG, "Kondisi sensor belum valid atau belum pulih");
+    if (!latest_sample_available_ || !sample_updated_while_output_off_)
+    {
+        ESP_LOGE(TAG, "Kirim pembacaan sensor baru melalui update() setelah output mati");
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (latest_sample_.sensor_error || !sample_valid(latest_sample_) ||
+        !sample_recovered(latest_sample_))
+    {
+        ESP_LOGE(TAG, "Kondisi sensor belum valid atau belum pulih \n\terr:%s\n\tV:%.3f\n\tI:%.3f\n\tP:%.3f\n\tT:%.3fC",
+                 latest_sample_.sensor_error ? "TRUE" : "FALSE",
+                 latest_sample_.voltage_v,
+                 latest_sample_.current_a,
+                 latest_sample_.power_w,
+                 latest_sample_.temperature_c);
         return ESP_ERR_INVALID_STATE;
     }
 
     bool gpio_fault_active = false;
     const esp_err_t gpio_err = read_fault_gpio(&gpio_fault_active);
-    if (gpio_err != ESP_OK) {
+    if (gpio_err != ESP_OK)
+    {
         return gpio_err;
     }
-    if (gpio_fault_active) {
+    if (gpio_fault_active)
+    {
         ESP_LOGE(TAG, "Input GPIO fault masih aktif");
         return ESP_ERR_INVALID_STATE;
     }
@@ -429,7 +505,8 @@ bool Protection::sample_recovered(const Sample &sample) const
 
 bool Protection::startup_grace_active() const
 {
-    if (config_.startup_grace_period_ms == 0 || !output_active_) {
+    if (config_.startup_grace_period_ms == 0 || !output_active_)
+    {
         return false;
     }
     const int64_t elapsed_us = esp_timer_get_time() - output_activated_at_us_;
@@ -451,14 +528,17 @@ bool Protection::threshold_reached(bool condition,
                                    uint16_t required_samples,
                                    uint16_t *counter)
 {
-    if (counter == nullptr) {
+    if (counter == nullptr)
+    {
         return false;
     }
-    if (!condition) {
+    if (!condition)
+    {
         *counter = 0;
         return false;
     }
-    if (*counter < required_samples) {
+    if (*counter < required_samples)
+    {
         ++(*counter);
     }
     return *counter >= required_samples;
@@ -466,16 +546,19 @@ bool Protection::threshold_reached(bool condition,
 
 esp_err_t Protection::read_fault_gpio(bool *active) const
 {
-    if (active == nullptr) {
+    if (active == nullptr)
+    {
         return ESP_ERR_INVALID_ARG;
     }
     *active = false;
-    if (config_.fault_gpio == GPIO_NUM_NC) {
+    if (config_.fault_gpio == GPIO_NUM_NC)
+    {
         return ESP_OK;
     }
 
     const int level = gpio_get_level(config_.fault_gpio);
-    if (level != 0 && level != 1) {
+    if (level != 0 && level != 1)
+    {
         ESP_LOGE(TAG, "Gagal membaca GPIO fault");
         return ESP_ERR_INVALID_RESPONSE;
     }
@@ -485,12 +568,14 @@ esp_err_t Protection::read_fault_gpio(bool *active) const
 
 esp_err_t Protection::latch_fault(protection_fault_t fault)
 {
-    if (latched_fault_ != protection_fault_t::None) {
+    if (latched_fault_ != protection_fault_t::None)
+    {
         return ESP_OK;
     }
     latched_fault_ = fault;
     ESP_LOGE(TAG, "Fault dilatch: %u", static_cast<unsigned>(fault));
-    if (config_.on_fault != nullptr) {
+    if (config_.on_fault != nullptr)
+    {
         return config_.on_fault(fault, config_.callback_context);
     }
     return ESP_OK;

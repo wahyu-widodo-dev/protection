@@ -227,15 +227,28 @@ disarankan:
 
 1. Pastikan output PSU nonaktif.
 2. Selesaikan penyebab fault dan pastikan input GPIO eksternal tidak aktif.
-3. Ambil pembacaan sensor baru yang valid.
+3. Setelah output mati, ambil pembacaan sensor baru yang valid dan kirim
+   melalui `update(sample, &fault)`.
 4. Pastikan setiap channel proteksi aktif berada di bawah
    `batas - hysteresis`.
-5. Panggil `clear_fault(sample)` dan periksa hasilnya.
+5. Panggil `clear_fault()` dan periksa hasilnya.
 6. Aktifkan kembali output hanya melalui kebijakan aplikasi.
 
-`clear_fault()` menolak permintaan jika output masih aktif, input fault masih
-aktif, data sensor tidak valid, atau salah satu nilai belum pulih. Mengubah
-batas atau menonaktifkan proteksi tidak menghapus fault yang sudah dilatch.
+`clear_fault()` menggunakan sampel terakhir yang dikirim ke `update()`. Ia
+mensyaratkan ada sampel baru setelah output dinyatakan nonaktif, lalu menolak
+permintaan jika input fault masih aktif, data sensor tidak valid, atau salah
+satu nilai belum pulih. Mengubah batas atau menonaktifkan proteksi tidak
+menghapus fault yang sudah dilatch.
+
+```cpp
+ESP_ERROR_CHECK(output.output_disable());
+ESP_ERROR_CHECK(protection.set_output_active(false));
+
+Protection::Sample recovered_sample = read_current_sensor_sample();
+protection_fault_t fault = protection_fault_t::None;
+ESP_ERROR_CHECK(protection.update(recovered_sample, &fault));
+ESP_ERROR_CHECK(protection.clear_fault());
+```
 
 ## Konfigurasi
 
@@ -275,7 +288,7 @@ Gunakan startup grace sesingkat yang dibutuhkan sistem.
 | `deinit()` | Lepaskan GPIO dan hentikan lifecycle. |
 | `set_output_active(active)` | Beri tahu komponen tentang status output dan mulai grace saat aktif. |
 | `update(sample, &fault)` | Evaluasi sampel terbaru dan kembalikan status fault. |
-| `clear_fault(sample)` | Hapus fault secara manual setelah kondisi aman. |
+| `clear_fault()` | Hapus fault dengan memvalidasi sampel terbaru dari `update()`. |
 | `get_fault()` | Baca fault yang dilatch. |
 | `is_initialized()` | Baca status inisialisasi. |
 | `is_output_active()` | Baca status output yang diberitahukan aplikasi. |

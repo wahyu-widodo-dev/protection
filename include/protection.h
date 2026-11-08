@@ -113,8 +113,14 @@ public:
     /** Periksa sampel sensor dan kembalikan fault yang sedang dilatch. */
     esp_err_t update(const Sample &sample, protection_fault_t *out_fault);
 
-    /** Hapus fault secara manual setelah output nonaktif dan kondisi pulih. */
-    esp_err_t clear_fault(const Sample &sample);
+    /**
+     * @brief Hapus fault menggunakan sampel terakhir dari update().
+     *
+     * Setelah output dinonaktifkan, panggil update() dengan pembacaan sensor
+     * terbaru. Fault hanya dihapus jika sampel tersebut valid dan kondisi
+     * sudah pulih.
+     */
+    esp_err_t clear_fault();
 
     protection_fault_t get_fault() const;
     bool is_initialized() const;
@@ -131,9 +137,12 @@ private:
     uint16_t over_power_count_ = 0;
     uint16_t over_temperature_count_ = 0;
     uint16_t fault_gpio_count_ = 0;
+    Sample latest_sample_{};
     bool initialized_ = false;
     bool output_active_ = false;
     bool fault_gpio_configured_ = false;
+    bool latest_sample_available_ = false;
+    bool sample_updated_while_output_off_ = false;
 
     static bool valid_gpio(gpio_num_t gpio);
     static bool valid_limit(float limit, float hysteresis);
