@@ -22,9 +22,9 @@ enum class protection_fault_t : uint8_t {
 /**
  * @brief Pemeriksa proteksi software untuk sistem PSU.
  *
- * Komponen memeriksa sampel yang diberikan aplikasi dan melatch fault sampai
- * aplikasi mematikan output serta memanggil clear_fault() secara eksplisit.
- * Komponen tidak mengendalikan tahap daya secara langsung.
+ * Ambang proteksi dapat diperbarui saat runtime tanpa menginisialisasi ulang
+ * komponen. Komponen memeriksa sampel yang diberikan aplikasi dan tidak
+ * mengendalikan tahap daya secara langsung.
  */
 class Protection
 {
@@ -45,20 +45,20 @@ public:
 
     struct Config {
         bool over_voltage_enabled = true;
-        float over_voltage_limit_v = 0.0f;
-        float over_voltage_hysteresis_v = 0.2f;
+        float over_voltage_limit_v = 15.0f;
+        float over_voltage_hysteresis_v = 0.5f;
 
         bool over_current_enabled = true;
-        float over_current_limit_a = 0.0f;
-        float over_current_hysteresis_a = 0.05f;
+        float over_current_limit_a = 3.0f;
+        float over_current_hysteresis_a = 0.1f;
 
         bool over_power_enabled = false;
-        float over_power_limit_w = 0.0f;
-        float over_power_hysteresis_w = 0.5f;
+        float over_power_limit_w = 40.0f;
+        float over_power_hysteresis_w = 1.0f;
 
         bool over_temperature_enabled = true;
-        float over_temperature_limit_c = 0.0f;
-        float over_temperature_hysteresis_c = 2.0f;
+        float over_temperature_limit_c = 80.0f;
+        float over_temperature_hysteresis_c = 5.0f;
 
         gpio_num_t fault_gpio = GPIO_NUM_NC;
         bool fault_gpio_active_high = true;
@@ -84,37 +84,36 @@ public:
     Protection(Protection &&) = delete;
     Protection &operator=(Protection &&) = delete;
 
-    /** Validasi konfigurasi dan siapkan input GPIO fault jika digunakan. */
+    /** Validasi konfigurasi awal dan siapkan input GPIO fault opsional. */
     esp_err_t init(const Config &config);
 
     /** Lepaskan GPIO yang dikelola komponen dan hentikan lifecycle komponen. */
     esp_err_t deinit();
 
-    /**
-     * @brief Tandai apakah keluaran PSU sedang aktif.
-     *
-     * Masa startup grace dimulai ulang setiap kali output berubah dari nonaktif
-     * menjadi aktif. Fault yang sudah dilatch tidak dihapus oleh fungsi ini.
-     */
+    /** Tandai apakah output aktif; perubahan ke aktif memulai startup grace. */
     esp_err_t set_output_active(bool active);
 
     /**
-     * @brief Periksa sampel sensor dan kembalikan fault yang sedang dilatch.
+     * @brief Perbarui ambang dan hysteresis proteksi saat runtime.
      *
-     * Sensor yang proteksinya aktif wajib menandai nilai valid terkait dengan
-     * flag *_valid. Fault callback dipanggil satu kali saat fault pertama
-     * dilatch. Jika callback gagal, error callback dikembalikan tetapi fault
-     * tetap dilatch.
+     * Setter dapat dipanggil saat output berjalan. Parameter divalidasi
+     * bersama-sama dan berlaku pada pemeriksaan berikutnya.
      */
+    esp_err_t set_over_voltage_limit(float limit_v, float hysteresis_v);
+    esp_err_t set_over_current_limit(float limit_a, float hysteresis_a);
+    esp_err_t set_over_power_limit(float limit_w, float hysteresis_w);
+    esp_err_t set_over_temperature_limit(float limit_c, float hysteresis_c);
+
+    /** Aktifkan/nonaktifkan jenis proteksi saat runtime. */
+    esp_err_t set_over_voltage_enabled(bool enabled);
+    esp_err_t set_over_current_enabled(bool enabled);
+    esp_err_t set_over_power_enabled(bool enabled);
+    esp_err_t set_over_temperature_enabled(bool enabled);
+
+    /** Periksa sampel sensor dan kembalikan fault yang sedang dilatch. */
     esp_err_t update(const Sample &sample, protection_fault_t *out_fault);
 
-    /**
-     * @brief Hapus fault secara manual setelah output dimatikan dan kondisi pulih.
-     *
-     * Pembacaan harus valid, seluruh proteksi terkonfigurasi harus berada di
-     * bawah batas pemulihan (limit - hysteresis), dan input fault GPIO harus
-     * sudah tidak aktif.
-     */
+    /** Hapus fault secara manual setelah output nonaktif dan kondisi pulih. */
     esp_err_t clear_fault(const Sample &sample);
 
     protection_fault_t get_fault() const;

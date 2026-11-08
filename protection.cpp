@@ -126,6 +126,123 @@ esp_err_t Protection::set_output_active(bool active)
     return ESP_OK;
 }
 
+esp_err_t Protection::set_over_voltage_limit(float limit_v, float hysteresis_v)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!valid_limit(limit_v, hysteresis_v)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    config_.over_voltage_limit_v = limit_v;
+    config_.over_voltage_hysteresis_v = hysteresis_v;
+    over_voltage_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_current_limit(float limit_a, float hysteresis_a)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!valid_limit(limit_a, hysteresis_a)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    config_.over_current_limit_a = limit_a;
+    config_.over_current_hysteresis_a = hysteresis_a;
+    over_current_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_power_limit(float limit_w, float hysteresis_w)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!valid_limit(limit_w, hysteresis_w)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    config_.over_power_limit_w = limit_w;
+    config_.over_power_hysteresis_w = hysteresis_w;
+    over_power_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_temperature_limit(float limit_c,
+                                                 float hysteresis_c)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!valid_limit(limit_c, hysteresis_c)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    config_.over_temperature_limit_c = limit_c;
+    config_.over_temperature_hysteresis_c = hysteresis_c;
+    over_temperature_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_voltage_enabled(bool enabled)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (enabled &&
+        !valid_limit(config_.over_voltage_limit_v,
+                     config_.over_voltage_hysteresis_v)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    config_.over_voltage_enabled = enabled;
+    over_voltage_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_current_enabled(bool enabled)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (enabled &&
+        !valid_limit(config_.over_current_limit_a,
+                     config_.over_current_hysteresis_a)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    config_.over_current_enabled = enabled;
+    over_current_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_power_enabled(bool enabled)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (enabled &&
+        !valid_limit(config_.over_power_limit_w,
+                     config_.over_power_hysteresis_w)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    config_.over_power_enabled = enabled;
+    over_power_count_ = 0;
+    return ESP_OK;
+}
+
+esp_err_t Protection::set_over_temperature_enabled(bool enabled)
+{
+    if (!initialized_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (enabled &&
+        !valid_limit(config_.over_temperature_limit_c,
+                     config_.over_temperature_hysteresis_c)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    config_.over_temperature_enabled = enabled;
+    over_temperature_count_ = 0;
+    return ESP_OK;
+}
+
 esp_err_t Protection::update(const Sample &sample,
                              protection_fault_t *out_fault)
 {
